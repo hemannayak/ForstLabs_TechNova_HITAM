@@ -4,9 +4,65 @@ import { EmailService } from './emailService';
 import { processIssueWithAI } from './aiService';
 
 
-const isDevelopment = false; // Force real Firebase for testing
+const isDevelopment = false; // Set to false to use real Firebase
 
-// Fetch all issues from Firebase
+// Subscribe to real-time issue updates
+export const subscribeToIssues = (callback: (issues: Issue[]) => void): (() => void) => {
+  if (isDevelopment) {
+    // Mock subscription (just one-time fetch for now or polling)
+    mockBackend.fetchIssues().then(callback);
+    return () => {};
+  }
+
+  console.log('📡 Subscribing to issues collection...');
+  
+  // We need to use require/import dynamically or assuming firebase is init
+  // To avoid async issues in sync return, we'll use the async iife pattern strictly locally or assume imports
+  // But strictly, we need to import `onSnapshot`.
+  // Since this must return an Unsubscribe function synchronously(ish), handling async imports is tricky.
+  // We will assume imports are available or handle it with a promise-based setup in context.
+  // Actually, let's keep it simple: we'll do the import inside and call the callback.
+  // But context expects a sync unsubscribe usually.
+  
+  // Revised approach: Return a cleanup function that handles scope.
+  let unsubscribe: (() => void) | undefined;
+  
+  (async () => {
+    try {
+      const { getFirestore, collection, onSnapshot, query, orderBy } = await import('firebase/firestore');
+      const firebaseModule = await import('../config/firebase');
+      const app = firebaseModule.default;
+      
+      if (!app) return;
+      
+      const db = getFirestore(app);
+      const q = query(collection(db, 'issues'), orderBy('reportedAt', 'desc'));
+      
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const issues: Issue[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          issues.push({
+            ...data,
+            id: doc.id,
+            reportedAt: data.reportedAt || data.createdAt || new Date().toISOString(),
+            status: data.status || 'pending'
+          } as Issue);
+        });
+        console.log(`📡 Real-time update: ${issues.length} issues`);
+        callback(issues);
+      });
+    } catch (e) {
+      console.error("Subscription failed", e);
+    }
+  })();
+
+  return () => {
+    if (unsubscribe) unsubscribe();
+  };
+};
+
+// Fetch all issues from Firebase (Legacy / One-time)
 export const fetchIssues = async (): Promise<Issue[]> => {
   if (isDevelopment) {
     return await mockBackend.fetchIssues();
@@ -16,7 +72,7 @@ export const fetchIssues = async (): Promise<Issue[]> => {
     console.log('📊 Fetching issues from Firestore...');
 
     // Import Firebase modules
-    const { getFirestore, collection, getDocs } = await import('firebase/firestore');
+    const { getFirestore, collection, getDocs, query, orderBy } = await import('firebase/firestore');
     const firebaseModule = await import('../config/firebase');
     const app = firebaseModule.default;
 
@@ -26,7 +82,8 @@ export const fetchIssues = async (): Promise<Issue[]> => {
 
     const db = getFirestore(app);
     const issuesCollection = collection(db, 'issues');
-    const querySnapshot = await getDocs(issuesCollection);
+    const q = query(issuesCollection, orderBy('reportedAt', 'desc'));
+    const querySnapshot = await getDocs(q);
 
     const issues: Issue[] = [];
     querySnapshot.forEach((doc) => {

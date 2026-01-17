@@ -10,7 +10,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, signup } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,6 +37,24 @@ const LoginPage: React.FC = () => {
   const handleSocialLogin = (provider: string) => {
     console.log(`Login with ${provider}`);
     // Future integration
+  };
+
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    try {
+      // Try to login first
+      await login('demo@civicsense.com', 'demo123');
+      navigate('/');
+    } catch (e: any) {
+      // If user not found, create it
+      try {
+        await signup('demo@civicsense.com', 'demo123', 'Demo Jury');
+        navigate('/');
+      } catch (signupError) {
+        setError('Failed to create demo account. Please try manual signup.');
+        setLoading(false);
+      }
+    }
   };
 
   return (
@@ -181,6 +199,16 @@ const LoginPage: React.FC = () => {
               ) : (
                 'Sign In'
               )}
+            </button>
+
+            {/* Demo Button */}
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              disabled={loading}
+              className="w-full flex justify-center py-3.5 px-4 border border-indigo-200 rounded-xl shadow-sm text-sm font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 disabled:cursor-not-allowed transition-all transform hover:-translate-y-0.5"
+            >
+              🚀 Quick Demo Login (Jury)
             </button>
           </form>
 

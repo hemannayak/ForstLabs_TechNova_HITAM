@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { Icon } from 'leaflet';
-import { Filter, ThumbsUp, ThumbsDown, Eye, MapPin, Navigation, Crosshair, AlertCircle } from 'lucide-react';
+import { Filter, MapPin, Crosshair, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import 'leaflet/dist/leaflet.css';
 
@@ -57,11 +57,11 @@ const LocationMarker: React.FC<{ userLocation: { lat: number; lng: number } | nu
 };
 
 const LiveMapPage: React.FC = () => {
-  const { issues, voteOnIssue } = useApp();
+  const { issues } = useApp();
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationPermission, setLocationPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null);
+
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const mapRef = useRef<any>(null);
@@ -85,9 +85,9 @@ const LiveMapPage: React.FC = () => {
       (position) => {
         const { latitude, longitude } = position.coords;
         setUserLocation({ lat: latitude, lng: longitude });
-        setLocationPermission('granted');
+
         setIsGettingLocation(false);
-        
+
         // Check if location is in Hyderabad area (roughly within 50km radius)
         const distance = getDistanceFromHyderabad(latitude, longitude);
         if (distance > 50) {
@@ -96,9 +96,9 @@ const LiveMapPage: React.FC = () => {
       },
       (error) => {
         console.error('Location error:', error);
-        setLocationPermission('denied');
+
         setIsGettingLocation(false);
-        
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
             setLocationError('Location permission denied. Please enable location access.');
@@ -124,16 +124,16 @@ const LiveMapPage: React.FC = () => {
   const getDistanceFromHyderabad = (lat: number, lng: number) => {
     const hyderabadLat = HYDERABAD_CENTER[0];
     const hyderabadLng = HYDERABAD_CENTER[1];
-    
+
     const R = 6371; // Earth's radius in km
     const dLat = (lat - hyderabadLat) * Math.PI / 180;
     const dLng = (lng - hyderabadLng) * Math.PI / 180;
-    
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(hyderabadLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(hyderabadLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -173,12 +173,14 @@ const LiveMapPage: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
+    const statusConfig: Record<string, { color: string; label: string }> = {
       pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending' },
       'in-progress': { color: 'bg-blue-100 text-blue-800', label: 'In Progress' },
-      resolved: { color: 'bg-green-100 text-green-800', label: 'Resolved' }
+      resolved: { color: 'bg-green-100 text-green-800', label: 'Resolved' },
+      approved: { color: 'bg-purple-100 text-purple-800', label: 'Approved' },
+      'reported-to-authority': { color: 'bg-indigo-100 text-indigo-800', label: 'Reported' }
     };
-    const config = statusConfig[status as keyof typeof statusConfig];
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', label: status };
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
         {config.label}
@@ -214,7 +216,7 @@ const LiveMapPage: React.FC = () => {
               Real-time view of ALL reported issues in Hyderabad - visible to everyone ({filteredIssues.length} shown)
             </p>
           </div>
-          
+
           {/* Location and Filters */}
           <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
             {/* Location Button */}
@@ -247,7 +249,7 @@ const LiveMapPage: React.FC = () => {
                 <option value="high">High</option>
               </select>
             </div>
-            
+
             <div>
               <select
                 value={selectedStatus}
@@ -289,10 +291,10 @@ const LiveMapPage: React.FC = () => {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          
+
           {/* User Location Marker */}
           <LocationMarker userLocation={userLocation} />
-          
+
           {filteredIssues.map((issue) => (
             <Marker
               key={issue.id}
@@ -306,23 +308,23 @@ const LiveMapPage: React.FC = () => {
                     alt={issue.title}
                     className="w-full h-32 object-cover rounded-lg mb-3"
                   />
-                  
+
                   <h3 className="font-semibold text-gray-900 mb-2">{issue.title}</h3>
-                  
+
                   <div className="flex items-center space-x-2 mb-2">
                     {getSeverityBadge(issue.severity)}
                     {getStatusBadge(issue.status)}
                   </div>
-                  
+
                   <p className="text-sm text-gray-600 mb-2">{issue.description}</p>
-                  
+
                   <div className="text-xs text-gray-500 mb-3">
                     <div>Type: {issue.type}</div>
                     <div>Reported: {new Date(issue.reportedAt).toLocaleDateString()}</div>
                     <div>By: {issue.reportedBy}</div>
                     <div>Admin Approved: {issue.adminApproved ? '✅' : '❌'}</div>
                   </div>
-                  
+
                   <div className="border-t pt-2">
                     {issue.publicVoting.enabled ? (
                       <div>
@@ -395,7 +397,7 @@ const LiveMapPage: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-gray-600">Resolution Rate:</span>
                 <span className="font-semibold text-gray-900">
-                  {filteredIssues.length > 0 
+                  {filteredIssues.length > 0
                     ? ((filteredIssues.filter(i => i.status === 'resolved').length / filteredIssues.length) * 100).toFixed(1)
                     : '0'}%
                 </span>

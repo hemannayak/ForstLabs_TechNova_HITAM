@@ -64,36 +64,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, [authUser]);
 
-  // Load issues from Firebase
+  // Load issues from Firebase (Real-time)
   useEffect(() => {
-    const loadIssues = async () => {
-      try {
-        setLoading(true);
-        console.log('🔥 Connecting to backend...');
+    let unsubscribe: (() => void) | undefined;
 
-        // Fetch real data from Firebase
-        const data = await fetchIssues();
-        console.log(`✅ Loaded ${data.length} reports from backend`);
+    // Dynamically import subscribeToIssues to avoid circular deps if any
+    import('../services/firebaseService').then(({ subscribeToIssues, fetchIssues }) => {
+      console.log('🔥 Connecting to backend (real-time)...');
+      setLoading(true);
 
+      unsubscribe = subscribeToIssues((data) => {
+        console.log(`✅ Loaded ${data.length} reports from real-time listener`);
+        setIssues(data);
         setIsBackendConnected(true);
-
-        if (data.length > 0) {
-          setIssues(data);
-        } else {
-          // Fallback to mock data if backend is empty (for demo purposes)
-          console.log('⚠️ Backend empty, loading demo data');
-          setIssues(mockIssues);
-        }
-      } catch (error) {
-        console.error('Failed to load issues:', error);
-        setIsBackendConnected(false);
-        setIssues(mockIssues);
-      } finally {
         setLoading(false);
-      }
-    };
 
-    loadIssues();
+        if (data.length === 0) {
+          console.log('⚠️ Backend empty, checking if we should load fallback?');
+          // optional: fallback to mock if really empty? No, better show empty state.
+        }
+      });
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const addIssue = (issue: Issue) => {
